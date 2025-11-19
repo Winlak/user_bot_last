@@ -72,6 +72,7 @@ async def main():
     session_file = settings.data_dir / f"{settings.session_name}.session"
     string_session = os.getenv("STRING_SESSION", "").strip()
 
+
     if string_session:
         logger.info("Using STRING_SESSION from environment")
         session = StringSession(string_session)
@@ -84,6 +85,7 @@ async def main():
             session_file,
         )
         return
+
 
     client = TelegramClient(session, settings.api_id, settings.api_hash)
 
