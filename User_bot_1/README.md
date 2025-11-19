@@ -16,6 +16,7 @@
    TELEGRAM_API_ID=31847442
    TELEGRAM_API_HASH=365488c19dfc94489f4628436f2fdd92
    TELEGRAM_STRING_SESSION=<сюда вставьте строку сессии>
+
    SOURCE_CHANNEL=@neoalertstest
    TARGET_CHANNELS=@test_neouser
    FORWARDING_ENABLED=true
@@ -23,6 +24,8 @@
    FORWARDING_QUEUE_MAXSIZE=100
    FORWARDING_DELAY_SECONDS=1.5
    DB_URL=sqlite+aiosqlite:///db.sqlite3
+   SESSION_NAME=trustat_keyword_forwarder
+
    LOG_LEVEL=INFO
    ```
 
@@ -32,6 +35,7 @@
 3. Запустите бота:
 
    ```bash
+
    # при необходимости получите строку сессии (разовый интерактивный вход):
    python create_session.py
 
@@ -40,6 +44,7 @@
    ```
 
 Бот использует только строковую сессию `TELEGRAM_STRING_SESSION` и ведёт базу данных для проверки уникальности сообщений.
+
 
 ## Поведение
 

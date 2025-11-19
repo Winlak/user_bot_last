@@ -1,6 +1,7 @@
 """Main entry point for the Telegram forwarder bot."""
 import asyncio
 import logging
+
 import re
 import signal
 import sys
@@ -30,6 +31,7 @@ def signal_handler(signum, frame):
     shutdown_event.set()
 
 
+
 def extract_first_link(text: str) -> str | None:
     """Return the first Telegram link from the given text."""
 
@@ -37,6 +39,7 @@ def extract_first_link(text: str) -> str | None:
         return None
     match = re.search(r"https?://t\.me/[^\s]+", text)
     return match.group(0) if match else None
+
 
 
 async def main():
@@ -69,9 +72,11 @@ async def main():
         maxsize=settings.forwarding_queue_maxsize,
     )
 
+
     client = TelegramClient(
         StringSession(settings.string_session), settings.api_id, settings.api_hash
     )
+
 
     @client.on(events.NewMessage(chats=settings.source_channel))
     async def handler(event):
@@ -79,6 +84,7 @@ async def main():
             return
 
         message_text = event.message.message or ""
+
         link = extract_first_link(message_text)
 
         if not link:
@@ -94,10 +100,12 @@ async def main():
         else:
             logger.info("Dry run: would forward %s", link)
 
+
     try:
         await client.start()
         me = await client.get_me()
         logger.info("✅ Successfully logged in as: %s (@%s)", me.first_name, me.username)
+
         logger.info("Listening to messages from %s...", settings.source_channel)
         await shutdown_event.wait()
 

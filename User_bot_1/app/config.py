@@ -43,7 +43,9 @@ class Settings:
 
     api_id: int
     api_hash: str
+
     string_session: str
+
     source_channel: str
     target_channels: List[str]
     forwarding_enabled: bool
@@ -60,6 +62,7 @@ class Settings:
         self.api_id = int(os.getenv("TELEGRAM_API_ID", os.getenv("API_ID", "0")))
         self.api_hash = os.getenv("TELEGRAM_API_HASH", os.getenv("API_HASH", ""))
         self.string_session = os.getenv("TELEGRAM_STRING_SESSION", "").strip()
+
 
         self.source_channel = os.getenv("SOURCE_CHANNEL", "")
         target_channels_str = os.getenv("TARGET_CHANNELS", "")
