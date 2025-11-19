@@ -1,0 +1,13 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    volumes:
+      # Монтируем только data директорию
+      - ./data:/app/data
+      - ./keywords.txt:/app/keywords.txt:ro
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATA_DIR=/app/data
