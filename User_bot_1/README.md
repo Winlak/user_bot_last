@@ -10,12 +10,10 @@
    pip install -r requirements.txt
    ```
 
-2. Создайте файл `.env` рядом с `run.py` и заполните его настройками Telegram. Пример файла из условия:
 
    ```env
    API_ID=31847442
    API_HASH=365488c19dfc94489f4628436f2fdd92
-   BOT_TOKEN=7753767364:AAFXn2sCmdGmLVKRFVs5vGSeJANLI1FHcuA
    SOURCE_CHANNEL=@neoalertstest
    TARGET_CHANNELS=@test_neouser
    FORWARDING_ENABLED=true
@@ -33,10 +31,13 @@
 3. Запустите бота:
 
    ```bash
+   # сначала один раз создайте сессию пользователя (запросит код из Telegram):
+   python create_session.py
+
+   # затем запустите основного бота
    python run.py
    ```
 
-Бот самостоятельно создаст файл сессии и базу данных для проверки уникальности сообщений.
 
 ## Поведение
 

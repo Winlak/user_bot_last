@@ -70,7 +70,8 @@ async def main():
     )
 
     session_file = settings.data_dir / f"{settings.session_name}.session"
-    string_session = os.getenv("STRING_SESSION", "")
+    string_session = os.getenv("STRING_SESSION", "").strip()
+
 
     if string_session:
         logger.info("Using STRING_SESSION from environment")
@@ -79,8 +80,12 @@ async def main():
         logger.info("Using session file: %s", session_file)
         session = str(session_file.with_suffix(""))
     else:
-        logger.info("Creating new session: %s", session_file)
-        session = str(session_file.with_suffix(""))
+        logger.error(
+            "No session found. Create %s with create_session.py or set STRING_SESSION.",
+            session_file,
+        )
+        return
+
 
     client = TelegramClient(session, settings.api_id, settings.api_hash)
 
