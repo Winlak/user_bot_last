@@ -10,10 +10,13 @@
    pip install -r requirements.txt
    ```
 
+2. Создайте файл `.env` рядом с `run.py` и заполните его настройками Telegram (бот работает от имени пользовательского аккаунта, не бот-токена). Авторизация выполняется только через строку сессии `TELEGRAM_STRING_SESSION`, полученную заранее. Пример файла:
 
    ```env
-   API_ID=31847442
-   API_HASH=365488c19dfc94489f4628436f2fdd92
+   TELEGRAM_API_ID=31847442
+   TELEGRAM_API_HASH=365488c19dfc94489f4628436f2fdd92
+   TELEGRAM_STRING_SESSION=<сюда вставьте строку сессии>
+
    SOURCE_CHANNEL=@neoalertstest
    TARGET_CHANNELS=@test_neouser
    FORWARDING_ENABLED=true
@@ -22,6 +25,7 @@
    FORWARDING_DELAY_SECONDS=1.5
    DB_URL=sqlite+aiosqlite:///db.sqlite3
    SESSION_NAME=trustat_keyword_forwarder
+
    LOG_LEVEL=INFO
    ```
 
@@ -31,12 +35,15 @@
 3. Запустите бота:
 
    ```bash
-   # сначала один раз создайте сессию пользователя (запросит код из Telegram):
+
+   # при необходимости получите строку сессии (разовый интерактивный вход):
    python create_session.py
 
    # затем запустите основного бота
    python run.py
    ```
+
+Бот использует только строковую сессию `TELEGRAM_STRING_SESSION` и ведёт базу данных для проверки уникальности сообщений.
 
 
 ## Поведение

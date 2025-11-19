@@ -43,7 +43,9 @@ class Settings:
 
     api_id: int
     api_hash: str
-    session_name: str
+
+    string_session: str
+
     source_channel: str
     target_channels: List[str]
     forwarding_enabled: bool
@@ -57,9 +59,10 @@ class Settings:
     def __init__(self):
         """Initialize settings from environment variables."""
 
-        self.api_id = int(os.getenv("API_ID", "0"))
-        self.api_hash = os.getenv("API_HASH", "")
-        self.session_name = os.getenv("SESSION_NAME", "trustat_keyword_forwarder")
+        self.api_id = int(os.getenv("TELEGRAM_API_ID", os.getenv("API_ID", "0")))
+        self.api_hash = os.getenv("TELEGRAM_API_HASH", os.getenv("API_HASH", ""))
+        self.string_session = os.getenv("TELEGRAM_STRING_SESSION", "").strip()
+
 
         self.source_channel = os.getenv("SOURCE_CHANNEL", "")
         target_channels_str = os.getenv("TARGET_CHANNELS", "")
@@ -86,7 +89,9 @@ class Settings:
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
 
         if not self.api_id or not self.api_hash:
-            raise ValueError("API_ID and API_HASH must be set")
+            raise ValueError("TELEGRAM_API_ID and TELEGRAM_API_HASH must be set")
+        if not self.string_session:
+            raise ValueError("TELEGRAM_STRING_SESSION must be set")
         if not self.source_channel:
             raise ValueError("SOURCE_CHANNEL must be set")
         if not self.target_channels and self.forwarding_enabled:

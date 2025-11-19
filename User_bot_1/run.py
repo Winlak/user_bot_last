@@ -1,7 +1,7 @@
 """Main entry point for the Telegram forwarder bot."""
 import asyncio
 import logging
-import os
+
 import re
 import signal
 import sys
@@ -31,12 +31,15 @@ def signal_handler(signum, frame):
     shutdown_event.set()
 
 
-def extract_links(text: str) -> list[str]:
-    """Return all Telegram links from the given text."""
+
+def extract_first_link(text: str) -> str | None:
+    """Return the first Telegram link from the given text."""
 
     if not text:
-        return []
-    return re.findall(r"https?://t\.me/[^\s]+", text)
+        return None
+    match = re.search(r"https?://t\.me/[^\s]+", text)
+    return match.group(0) if match else None
+
 
 
 async def main():
@@ -69,25 +72,11 @@ async def main():
         maxsize=settings.forwarding_queue_maxsize,
     )
 
-    session_file = settings.data_dir / f"{settings.session_name}.session"
-    string_session = os.getenv("STRING_SESSION", "").strip()
 
+    client = TelegramClient(
+        StringSession(settings.string_session), settings.api_id, settings.api_hash
+    )
 
-    if string_session:
-        logger.info("Using STRING_SESSION from environment")
-        session = StringSession(string_session)
-    elif session_file.exists():
-        logger.info("Using session file: %s", session_file)
-        session = str(session_file.with_suffix(""))
-    else:
-        logger.error(
-            "No session found. Create %s with create_session.py or set STRING_SESSION.",
-            session_file,
-        )
-        return
-
-
-    client = TelegramClient(session, settings.api_id, settings.api_hash)
 
     @client.on(events.NewMessage(chats=settings.source_channel))
     async def handler(event):
@@ -95,39 +84,31 @@ async def main():
             return
 
         message_text = event.message.message or ""
-        links = extract_links(message_text)
 
-        if not links:
-            logger.debug("No links found in message %s", event.message.id)
+        link = extract_first_link(message_text)
+
+        if not link:
+            logger.debug("No link found in message %s", event.message.id)
             return
 
-        for link in links:
-            if dedup_store and dedup_store.is_duplicate(link):
-                logger.info("Link %s already processed, skipping", link)
-                continue
+        if dedup_store and dedup_store.is_duplicate(link):
+            logger.info("Link %s already processed, skipping", link)
+            return
 
-            if settings.forwarding_enabled:
-                await queue.add_link(client, link, settings.target_channels)
-            else:
-                logger.info("Dry run: would forward %s", link)
+        if settings.forwarding_enabled:
+            await queue.add_link(client, link, settings.target_channels)
+        else:
+            logger.info("Dry run: would forward %s", link)
+
 
     try:
         await client.start()
         me = await client.get_me()
         logger.info("✅ Successfully logged in as: %s (@%s)", me.first_name, me.username)
 
-        if not string_session:
-            new_string_session = client.session.save()
-            logger.info("=" * 60)
-            logger.info("STRING SESSION (save this to .env):")
-            logger.info(new_string_session)
-            logger.info("=" * 60)
-
         logger.info("Listening to messages from %s...", settings.source_channel)
         await shutdown_event.wait()
 
-    except KeyboardInterrupt:
-        logger.info("Received keyboard interrupt")
     except Exception as exc:  # pragma: no cover - defensive
         logger.exception("Error in main loop: %s", exc)
     finally:
