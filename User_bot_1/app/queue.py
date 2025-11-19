@@ -1,8 +1,10 @@
-"""Message forwarding queue with rate limiting."""
+"""Message forwarding queue with rate limiting and deduplication."""
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Iterable, Optional
+
+from app.messages import fetch_message_by_link, message_identity_string
 
 logger = logging.getLogger(__name__)
 
@@ -10,39 +12,44 @@ logger = logging.getLogger(__name__)
 class ForwardingQueue:
     """Queue for forwarding messages with rate limiting."""
 
-    def __init__(self, rate_limit_seconds: float = 1.0):
-        """
-        Initialize forwarding queue.
-
-        Args:
-            rate_limit_seconds: Minimum seconds between forwards
-        """
-        self.rate_limit = rate_limit_seconds
-        self.queue = asyncio.Queue()
+    def __init__(
+        self,
+        dedup_store,
+        delay_seconds: float = 0.0,
+        max_messages_per_second: Optional[float] = None,
+        maxsize: Optional[int] = None,
+    ):
+        self.dedup_store = dedup_store
+        self.delay_seconds = max(delay_seconds, 0.0)
+        self.min_interval = (
+            1.0 / max_messages_per_second if max_messages_per_second else 0.0
+        )
+        self.queue: asyncio.Queue = (
+            asyncio.Queue(maxsize=maxsize) if maxsize else asyncio.Queue()
+        )
         self.running = False
-        self.worker_task = None
-        self.last_forward_time = None
+        self.worker_task: asyncio.Task | None = None
+        self.last_send_time: Optional[datetime] = None
 
-        logger.info(f"Initialized forwarding queue with {rate_limit_seconds}s rate limit")
+        logger.info(
+            "Initialized forwarding queue: delay=%ss, max_mps=%s, maxsize=%s",
+            self.delay_seconds,
+            max_messages_per_second,
+            maxsize,
+        )
 
-    async def add_to_queue(self, client: Any, message: Any, target: str):
-        """
-        Add message to forwarding queue.
+    async def add_link(self, client, link: str, targets: Iterable[str]):
+        """Add a Telegram link to the forwarding queue."""
 
-        Args:
-            client: Telegram client
-            message: Message to forward
-            target: Target channel
-        """
-        await self.queue.put((client, message, target))
-        logger.info(f"Added message {message.id} to queue for {target}")
+        await self.queue.put((client, link, list(targets)))
+        logger.info("Queued link %s", link)
 
-        # Start worker if not running
         if not self.running:
             await self.start()
 
     async def start(self):
         """Start the queue worker."""
+
         if self.running:
             return
 
@@ -52,6 +59,7 @@ class ForwardingQueue:
 
     async def stop(self):
         """Stop the queue worker."""
+
         self.running = False
 
         if self.worker_task:
@@ -63,42 +71,69 @@ class ForwardingQueue:
 
         logger.info("Forwarding queue worker stopped")
 
+    async def _respect_rate_limits(self):
+        """Sleep to honour the configured rate limits."""
+
+        now = datetime.now()
+        if self.last_send_time:
+            elapsed = (now - self.last_send_time).total_seconds()
+            wait_for = max(0.0, self.min_interval - elapsed)
+            if wait_for > 0:
+                await asyncio.sleep(wait_for)
+        if self.delay_seconds:
+            await asyncio.sleep(self.delay_seconds)
+        self.last_send_time = datetime.now()
+
     async def _worker(self):
         """Worker that processes the forwarding queue."""
+
         while self.running:
             try:
-                # Get next item from queue with timeout
-                try:
-                    client, message, target = await asyncio.wait_for(
-                        self.queue.get(),
-                        timeout=1.0
-                    )
-                except asyncio.TimeoutError:
+                client, link, targets = await asyncio.wait_for(self.queue.get(), timeout=1.0)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+
+            try:
+                message = await fetch_message_by_link(client, link)
+                if message is None:
+                    logger.warning("Message not found for link %s", link)
+                    self.queue.task_done()
                     continue
 
-                # Apply rate limiting
-                if self.last_forward_time:
-                    elapsed = (datetime.now() - self.last_forward_time).total_seconds()
-                    if elapsed < self.rate_limit:
-                        await asyncio.sleep(self.rate_limit - elapsed)
+                identity = message_identity_string(message)
+                if self.dedup_store and self.dedup_store.is_duplicate(identity):
+                    logger.info("Duplicate message %s, skipping", identity)
+                    self.queue.task_done()
+                    continue
 
-                # Forward the message
-                try:
-                    await client.forward_messages(target, message)
-                    logger.info(f"✅ Forwarded message {message.id} to {target}")
-                    self.last_forward_time = datetime.now()
-                except Exception as e:
-                    logger.error(f"❌ Failed to forward message {message.id} to {target}: {e}")
+                forward_success = False
+                for target in targets:
+                    try:
+                        await self._respect_rate_limits()
+                        await client.forward_messages(target, message)
+                        logger.info(
+                            "Forwarded %s to %s", identity, target
+                        )
+                        forward_success = True
+                    except Exception as exc:  # pragma: no cover - network errors
+                        logger.error(
+                            "Failed to forward %s to %s: %s", identity, target, exc
+                        )
 
-                # Mark task as done
-                self.queue.task_done()
+                if forward_success and self.dedup_store:
+                    self.dedup_store.add_message(identity)
+                    self.dedup_store.add_message(link)
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.error(f"Error in forwarding worker: {e}")
-                await asyncio.sleep(1.0)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Error in forwarding worker: %s", exc)
+            finally:
+                self.queue.task_done()
 
     def get_queue_size(self) -> int:
         """Get current queue size."""
+
         return self.queue.qsize()
