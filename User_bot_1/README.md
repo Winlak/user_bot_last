@@ -23,7 +23,6 @@
    FORWARDING_QUEUE_MAXSIZE=100
    FORWARDING_DELAY_SECONDS=1.5
    DB_URL=sqlite+aiosqlite:///db.sqlite3
-
    LOG_LEVEL=INFO
    ```
 
@@ -33,13 +32,13 @@
 3. Запустите бота:
 
    ```bash
-
    # при необходимости получите строку сессии (разовый интерактивный вход):
    python create_session.py
 
    # затем запустите основного бота
    python run.py
    ```
+
 
 Бот использует только строковую сессию `TELEGRAM_STRING_SESSION` и ведёт базу данных для проверки уникальности сообщений.
 

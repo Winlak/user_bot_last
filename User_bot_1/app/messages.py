@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
-
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from telethon.errors.rpcerrorlist import ChannelInvalidError, ChannelPrivateError
+from telethon.errors.rpcerrorlist import (
+    ChannelInvalidError,
+    ChannelPrivateError,
+    PeerIdInvalidError,
+)
 
 from telethon.tl.types import Message
 
@@ -22,9 +25,9 @@ class FetchOutcome:
     """Result of fetching a Telegram message by link."""
 
     message: Optional[Message]
-    leave_after: bool
-    pending_peer: str | int | None
     message_id: Optional[int]
+    needs_join: bool
+    access_error: Optional[Exception]
 
 
 
@@ -71,15 +74,15 @@ def parse_telegram_link(link: str) -> Optional[Tuple[str | int, int]]:
     return peer, message_id
 
 
+async def fetch_message_by_link(client, link: str) -> FetchOutcome:
 
-async def fetch_message_by_link(client, link: str):
     """Fetch a Telegram message given its link, handling common channel errors."""
 
     parsed = parse_telegram_link(link)
     if not parsed:
         logger.warning("Unsupported link format: %s", link)
 
-        return FetchOutcome(None, False, None, None)
+        return FetchOutcome(None, None, False, None)
 
 
     peer, message_id = parsed
@@ -87,12 +90,37 @@ async def fetch_message_by_link(client, link: str):
         entity = await client.get_entity(peer)
         message = await client.get_messages(entity, ids=message_id)
 
-        return FetchOutcome(message, False, None, message_id)
-    except ChannelPrivateError:
-        return FetchOutcome(None, False, peer, message_id)
-    except ChannelInvalidError:
-        return FetchOutcome(None, False, peer, message_id)
+        return FetchOutcome(message, message_id, False, None)
+    except (ChannelPrivateError, ChannelInvalidError, PeerIdInvalidError) as exc:
+        return FetchOutcome(None, message_id, True, exc)
+    except ValueError as exc:
+        if "Could not find the input entity for PeerChannel" in str(exc):
+            return FetchOutcome(None, message_id, True, exc)
+        logger.error("Failed to fetch message for %s: %s", link, exc)
+        return FetchOutcome(None, message_id, False, exc)
     except Exception as exc:  # pragma: no cover - network calls
         logger.error("Failed to fetch message for %s: %s", link, exc)
-        return FetchOutcome(None, False, None, message_id)
+        return FetchOutcome(None, message_id, False, exc)
+
+
+def extract_channel_link_from_entities(message: Message) -> Optional[str]:
+    """Return the first channel link from text entities (non /c/)."""
+
+    entities = getattr(message, "entities", None) or []
+    for entity in entities:
+        url = getattr(entity, "url", None)
+        if not url:
+            continue
+        if url.startswith("https://t.me/") and "/c/" not in url:
+            return url
+    return None
+
+
+def extract_message_link(text: str) -> Optional[str]:
+    """Return the first message link of the form https://t.me/c/..."""
+
+    if not text:
+        return None
+    match = re.search(r"https?://t\.me/c/[^\s]+", text)
+    return match.group(0) if match else None
 
