@@ -1,3 +1,4 @@
+
 """Create and print a Telegram StringSession for the bot."""
 import os
 from pathlib import Path
@@ -7,6 +8,7 @@ from telethon.sync import TelegramClient
 
 API_ID = int(os.getenv("TELEGRAM_API_ID", os.getenv("API_ID", "0")))
 API_HASH = os.getenv("TELEGRAM_API_HASH", os.getenv("API_HASH", ""))
+
 DATA_DIR = Path(os.getenv("DATA_DIR", "data"))
 
 
@@ -21,8 +23,10 @@ def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Creating Telegram StringSession...")
+
     print(f"API_ID: {API_ID}")
     print(f"API_HASH: {API_HASH}")
+    print(f"Session file: {session_file}")
 
     with TelegramClient(StringSession(), API_ID, API_HASH) as client:
         client.start()

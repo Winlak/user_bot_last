@@ -69,6 +69,7 @@ class DeduplicationStore:
                 )
                 """
             )
+
             conn.commit()
 
     def _cleanup_old_entries(self):
@@ -259,3 +260,4 @@ class DeduplicationStore:
                 """
             )
             return cursor.fetchone()
+

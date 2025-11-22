@@ -1,4 +1,6 @@
+
 """Message forwarding queue with rate limiting, retries, and deduplication."""
+
 import asyncio
 import logging
 from datetime import datetime
@@ -22,6 +24,7 @@ class ForwardingQueue:
     ):
         self.dedup_store = dedup_store
         self.subscription_tracker = subscription_tracker
+
         self.delay_seconds = max(delay_seconds, 0.0)
         self.min_interval = (
             1.0 / max_messages_per_second if max_messages_per_second else 0.0
@@ -39,7 +42,6 @@ class ForwardingQueue:
             max_messages_per_second,
             maxsize,
         )
-
     async def add_link(
         self,
         client,
@@ -51,6 +53,7 @@ class ForwardingQueue:
 
         await self.queue.put((client, message_link, list(targets), channel_link))
         logger.info("Queued link %s", message_link)
+
 
         if not self.running:
             await self.start()
@@ -112,6 +115,7 @@ class ForwardingQueue:
             self.dedup_store.add_message(identity)
             self.dedup_store.add_message(message_link)
 
+
     async def _worker(self):
         """Worker that processes the forwarding queue."""
 
@@ -120,11 +124,11 @@ class ForwardingQueue:
                 client, message_link, targets, channel_link = await asyncio.wait_for(
                     self.queue.get(), timeout=1.0
                 )
+
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break
-
             try:
                 outcome = await fetch_message_by_link(client, message_link)
                 if outcome.message is None:
@@ -151,6 +155,7 @@ class ForwardingQueue:
                         logger.warning("Message not available for link %s", message_link)
                     continue
 
+
                 await self._forward_message(client, outcome.message, targets, message_link)
             except asyncio.CancelledError:
                 break
@@ -163,8 +168,6 @@ class ForwardingQueue:
         """Get current queue size."""
 
         return self.queue.qsize()
-
-
 class PendingForwardWorker:
     """Worker that retries pending forwards after channel approvals."""
 
@@ -256,3 +259,4 @@ class PendingForwardWorker:
                 break
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Error in pending forward worker: %s", exc)
+

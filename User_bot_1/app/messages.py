@@ -12,6 +12,7 @@ from telethon.errors.rpcerrorlist import (
     ChannelPrivateError,
     PeerIdInvalidError,
 )
+
 from telethon.tl.types import Message
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class FetchOutcome:
     message_id: Optional[int]
     needs_join: bool
     access_error: Optional[Exception]
+
 
 
 def message_identity(message: Message) -> tuple[int | None, int]:
@@ -73,17 +75,21 @@ def parse_telegram_link(link: str) -> Optional[Tuple[str | int, int]]:
 
 
 async def fetch_message_by_link(client, link: str) -> FetchOutcome:
+
     """Fetch a Telegram message given its link, handling common channel errors."""
 
     parsed = parse_telegram_link(link)
     if not parsed:
         logger.warning("Unsupported link format: %s", link)
+
         return FetchOutcome(None, None, False, None)
+
 
     peer, message_id = parsed
     try:
         entity = await client.get_entity(peer)
         message = await client.get_messages(entity, ids=message_id)
+
         return FetchOutcome(message, message_id, False, None)
     except (ChannelPrivateError, ChannelInvalidError, PeerIdInvalidError) as exc:
         return FetchOutcome(None, message_id, True, exc)
@@ -117,3 +123,4 @@ def extract_message_link(text: str) -> Optional[str]:
         return None
     match = re.search(r"https?://t\.me/c/[^\s]+", text)
     return match.group(0) if match else None
+

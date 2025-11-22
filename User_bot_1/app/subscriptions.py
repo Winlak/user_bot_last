@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 
+
 from telethon import functions
 from telethon.errors.rpcerrorlist import (
     ChannelPrivateError,
     ChannelsTooMuchError,
 )
+
 
 from app.dedup import DeduplicationStore
 
@@ -28,7 +30,6 @@ class SubscriptionTracker:
             logger.info("Left channel %s to stay under join limits", peer)
         except Exception as exc:  # pragma: no cover - network calls
             logger.error("Failed to leave channel %s: %s", peer, exc)
-
     async def leave_after_forward(self, client, channel_link: str) -> None:
         try:
             await self.leave_channel(client, channel_link)
@@ -58,6 +59,7 @@ class SubscriptionTracker:
             channel_id = None
 
         try:
+
             await client(functions.channels.JoinChannelRequest(channel_link))
             self.store.record_joined_channel(channel_link, channel_id)
             self.store.add_pending_forward(
@@ -84,3 +86,4 @@ class SubscriptionTracker:
                 message_link, channel_link, "join_failed", str(exc)
             )
             return "join_failed"
+
