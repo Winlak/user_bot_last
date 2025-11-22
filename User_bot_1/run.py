@@ -39,7 +39,6 @@ def extract_first_link(text: str) -> str | None:
     match = re.search(r"https?://t\.me/[^\s]+", text)
     return match.group(0) if match else None
 
-
 async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -68,6 +67,7 @@ async def main():
     queue = ForwardingQueue(
         dedup_store=dedup_store,
         subscription_tracker=subscription_tracker,
+
         delay_seconds=settings.forwarding_delay_seconds,
         max_messages_per_second=settings.forwarding_max_messages_per_second,
         maxsize=settings.forwarding_queue_maxsize,
@@ -77,12 +77,14 @@ async def main():
         StringSession(settings.string_session), settings.api_id, settings.api_hash
     )
 
+
     @client.on(events.NewMessage(chats=settings.source_channel))
     async def handler(event):
         if shutdown_event.is_set():
             return
 
         message_text = event.message.message or ""
+
         link = extract_first_link(message_text)
 
         if not link:

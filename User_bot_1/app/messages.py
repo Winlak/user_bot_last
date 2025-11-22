@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
+
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from telethon.errors.rpcerrorlist import ChannelInvalidError, ChannelPrivateError
+
 from telethon.tl.types import Message
 
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ class FetchOutcome:
     leave_after: bool
     pending_peer: str | int | None
     message_id: Optional[int]
+
 
 
 def message_identity(message: Message) -> tuple[int | None, int]:
@@ -68,18 +71,22 @@ def parse_telegram_link(link: str) -> Optional[Tuple[str | int, int]]:
     return peer, message_id
 
 
+
 async def fetch_message_by_link(client, link: str):
     """Fetch a Telegram message given its link, handling common channel errors."""
 
     parsed = parse_telegram_link(link)
     if not parsed:
         logger.warning("Unsupported link format: %s", link)
+
         return FetchOutcome(None, False, None, None)
+
 
     peer, message_id = parsed
     try:
         entity = await client.get_entity(peer)
         message = await client.get_messages(entity, ids=message_id)
+
         return FetchOutcome(message, False, None, message_id)
     except ChannelPrivateError:
         return FetchOutcome(None, False, peer, message_id)
@@ -88,3 +95,4 @@ async def fetch_message_by_link(client, link: str):
     except Exception as exc:  # pragma: no cover - network calls
         logger.error("Failed to fetch message for %s: %s", link, exc)
         return FetchOutcome(None, False, None, message_id)
+

@@ -15,6 +15,7 @@ class ForwardingQueue:
     def __init__(
         self,
         dedup_store,
+
         subscription_tracker,
         delay_seconds: float = 0.0,
         max_messages_per_second: Optional[float] = None,
@@ -23,6 +24,7 @@ class ForwardingQueue:
     ):
         self.dedup_store = dedup_store
         self.subscription_tracker = subscription_tracker
+
         self.delay_seconds = max(delay_seconds, 0.0)
         self.min_interval = (
             1.0 / max_messages_per_second if max_messages_per_second else 0.0
@@ -34,6 +36,7 @@ class ForwardingQueue:
         self.worker_task: asyncio.Task | None = None
         self.last_send_time: Optional[datetime] = None
         self.pending_retry_seconds = max(pending_retry_seconds, 5.0)
+
 
         logger.info(
             "Initialized forwarding queue: delay=%ss, max_mps=%s, maxsize=%s",
@@ -135,12 +138,15 @@ class ForwardingQueue:
                     logger.info("Duplicate message %s, skipping", identity)
                     continue
 
+
                 forward_success = False
                 for target in targets:
                     try:
                         await self._respect_rate_limits()
                         await client.forward_messages(target, message)
+
                         logger.info("Forwarded %s to %s", identity, target)
+
                         forward_success = True
                     except Exception as exc:  # pragma: no cover - network errors
                         logger.error(
@@ -153,6 +159,7 @@ class ForwardingQueue:
 
                 if forward_success and outcome.leave_after:
                     await self.subscription_tracker.leave_after_forward(client, message)
+
 
             except asyncio.CancelledError:
                 break
