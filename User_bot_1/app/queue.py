@@ -15,11 +15,16 @@ class ForwardingQueue:
     def __init__(
         self,
         dedup_store,
+
+        subscription_tracker,
         delay_seconds: float = 0.0,
         max_messages_per_second: Optional[float] = None,
         maxsize: Optional[int] = None,
+        pending_retry_seconds: float = 60.0,
     ):
         self.dedup_store = dedup_store
+        self.subscription_tracker = subscription_tracker
+
         self.delay_seconds = max(delay_seconds, 0.0)
         self.min_interval = (
             1.0 / max_messages_per_second if max_messages_per_second else 0.0
@@ -30,6 +35,8 @@ class ForwardingQueue:
         self.running = False
         self.worker_task: asyncio.Task | None = None
         self.last_send_time: Optional[datetime] = None
+        self.pending_retry_seconds = max(pending_retry_seconds, 5.0)
+
 
         logger.info(
             "Initialized forwarding queue: delay=%ss, max_mps=%s, maxsize=%s",
@@ -84,6 +91,10 @@ class ForwardingQueue:
             await asyncio.sleep(self.delay_seconds)
         self.last_send_time = datetime.now()
 
+    async def _requeue_later(self, client, link: str, targets):
+        await asyncio.sleep(self.pending_retry_seconds)
+        await self.add_link(client, link, targets)
+
     async def _worker(self):
         """Worker that processes the forwarding queue."""
 
@@ -96,26 +107,46 @@ class ForwardingQueue:
                 break
 
             try:
-                message = await fetch_message_by_link(client, link)
-                if message is None:
-                    logger.warning("Message not found for link %s", link)
-                    self.queue.task_done()
-                    continue
+                outcome = await fetch_message_by_link(client, link)
+                if outcome.message is None:
+                    if outcome.pending_peer is not None:
+                        join_attempt = await self.subscription_tracker.ensure_membership(
+                            client, outcome.pending_peer, outcome.message_id or 0, link
+                        )
+                        if join_attempt.joined:
+                            # retry fetch now that we've joined
+                            outcome = await fetch_message_by_link(client, link)
+                            if outcome.message:
+                                outcome.leave_after = True
+                        elif join_attempt.pending:
+                            logger.info(
+                                "Waiting for approval to access %s; will retry", join_attempt.channel_username
+                                or join_attempt.channel_id
+                            )
+                            asyncio.create_task(
+                                self._requeue_later(client, link, targets)
+                            )
+                            continue
 
+                    if outcome.message is None:
+                        logger.warning("Message not available for link %s", link)
+                        continue
+
+                message = outcome.message
                 identity = message_identity_string(message)
                 if self.dedup_store and self.dedup_store.is_duplicate(identity):
                     logger.info("Duplicate message %s, skipping", identity)
-                    self.queue.task_done()
                     continue
+
 
                 forward_success = False
                 for target in targets:
                     try:
                         await self._respect_rate_limits()
                         await client.forward_messages(target, message)
-                        logger.info(
-                            "Forwarded %s to %s", identity, target
-                        )
+
+                        logger.info("Forwarded %s to %s", identity, target)
+
                         forward_success = True
                     except Exception as exc:  # pragma: no cover - network errors
                         logger.error(
@@ -125,6 +156,10 @@ class ForwardingQueue:
                 if forward_success and self.dedup_store:
                     self.dedup_store.add_message(identity)
                     self.dedup_store.add_message(link)
+
+                if forward_success and outcome.leave_after:
+                    await self.subscription_tracker.leave_after_forward(client, message)
+
 
             except asyncio.CancelledError:
                 break

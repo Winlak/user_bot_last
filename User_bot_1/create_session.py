@@ -35,9 +35,7 @@ def main() -> None:
         me = client.get_me()
         session_string = client.session.save()
 
-
     print(f"\n✅ Successfully logged in as: {me.first_name} (@{me.username})")
-
     print("🔑 TELEGRAM_STRING_SESSION (add to your .env):")
     print(session_string)
 
